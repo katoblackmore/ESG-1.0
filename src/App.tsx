@@ -634,7 +634,7 @@ export default function App() {
           <p className="mt-2 text-sm text-zinc-400 max-w-2xl">Fill the form, preview instantly, then copy the signature.</p>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 lg:items-start">
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4 md:p-5">
             <SectionTitle
               right={
@@ -868,7 +868,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 md:p-5">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4 md:p-5 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto">
             <SectionTitle
               right={
                 <div className="flex items-center gap-3 ml-auto justify-end">
