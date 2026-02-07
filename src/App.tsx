@@ -112,10 +112,21 @@ function escapeHtml(str: string) {
     .replace(/'/g, "&#039;");
 }
 
-type BuildOpts = { theme?: "light" | "dark" };
+type SignatureLayout = "classic" | "elegant" | "horizontal" | "minimal" | "bold";
+
+type BuildOpts = { theme?: "light" | "dark"; layout?: SignatureLayout };
+
+const SIGNATURE_LAYOUTS: { id: SignatureLayout; name: string }[] = [
+  { id: "classic", name: "Classic" },
+  { id: "elegant", name: "Elegant" },
+  { id: "horizontal", name: "Horizontal" },
+  { id: "minimal", name: "Minimal" },
+  { id: "bold", name: "Bold" },
+];
 
 function buildSignatureHTML(data: FormData, opts: BuildOpts = {}) {
   const theme = opts.theme === "dark" ? "dark" : "light";
+  const layout: SignatureLayout = opts.layout || "classic";
   const SOCIAL = theme === "dark" ? SOCIAL_DARK : SOCIAL_LIGHT;
 
   const font = "Arial, Helvetica, sans-serif";
@@ -123,9 +134,11 @@ function buildSignatureHTML(data: FormData, opts: BuildOpts = {}) {
   const gray600 = theme === "dark" ? "#e5e7eb" : "#4b5563";
   const gray500 = theme === "dark" ? "#cbd5e1" : "#6b7280";
   const gray400 = theme === "dark" ? "#94a3b8" : "#9ca3af";
+  const accent = theme === "dark" ? "#818cf8" : "#4f46e5";
+  const dividerColor = theme === "dark" ? "#334155" : "#e5e7eb";
 
   const fullName = [data.firstName, data.lastName].filter(Boolean).join(" ").trim();
-  const jobLine = [data.jobTitle, data.department].filter(Boolean).join(" • ").trim();
+  const jobLine = [data.jobTitle, data.department].filter(Boolean).join(" \u2022 ").trim();
 
   const company = String(data.companyName || "").trim();
   const officePhone = String(data.officePhone || "").trim();
@@ -149,20 +162,12 @@ function buildSignatureHTML(data: FormData, opts: BuildOpts = {}) {
 
   const baseTd = `font-family:${font}; text-align:left; mso-line-height-rule:exactly; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%;`;
 
-  const row = (html: string) => {
-    if (!html) return "";
-    return `
-<tr>
-  <td style="padding:2px 0; ${baseTd} font-size:14px; line-height:18px; color:${gray600};">${html}</td>
-</tr>`;
-  };
-
   const officeHtml = officePhone
-    ? `<span style="color:${gray500};">Office:</span> <a href="tel:${escapeHtml(officePhone)}" style="color:${gray600}; text-decoration:none;">${escapeHtml(officePhone)}</a>`
+    ? `<a href="tel:${escapeHtml(officePhone)}" style="color:${gray600}; text-decoration:none;">${escapeHtml(officePhone)}</a>`
     : "";
 
   const mobileHtml = mobilePhone
-    ? `<span style="color:${gray500};">Mobile:</span> <a href="tel:${escapeHtml(mobilePhone)}" style="color:${gray600}; text-decoration:none;">${escapeHtml(mobilePhone)}</a>`
+    ? `<a href="tel:${escapeHtml(mobilePhone)}" style="color:${gray600}; text-decoration:none;">${escapeHtml(mobilePhone)}</a>`
     : "";
 
   const emailHtml = email
@@ -179,126 +184,267 @@ function buildSignatureHTML(data: FormData, opts: BuildOpts = {}) {
 
   const legal = String(data.legal || "").trim();
 
-  const socialsRow =
-    socials.length > 0
-      ? `
-<tr>
-  <td style="padding-top:10px; ${baseTd}">
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; ${baseTd}">
-      <tr>
-        ${socials
-          .map(
-            (s) =>
-              `<td style="padding-right:8px;"><a href="${escapeHtml(
-                s.url
-              )}" style="text-decoration:none;" target="_blank" rel="noopener noreferrer"><img src="${SOCIAL[
-                s.key as keyof typeof SOCIAL
-              ]}" width="24" height="24" style="display:block; border:0; outline:none; text-decoration:none;" alt="${escapeHtml(
-                s.label
-              )}" /></a></td>`
-          )
-          .join("")}
-      </tr>
-    </table>
-  </td>
-</tr>`
+  const socialsHtml = socials.length > 0
+    ? socials
+        .map(
+          (s) =>
+            `<td style="padding-right:8px;"><a href="${escapeHtml(
+              s.url
+            )}" style="text-decoration:none;" target="_blank" rel="noopener noreferrer"><img src="${SOCIAL[
+              s.key as keyof typeof SOCIAL
+            ]}" width="24" height="24" style="display:block; border:0; outline:none; text-decoration:none;" alt="${escapeHtml(
+              s.label
+            )}" /></a></td>`
+        )
+        .join("")
+    : "";
+
+  const socialsRow = socialsHtml
+    ? `<tr><td style="padding-top:10px; ${baseTd}"><table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; ${baseTd}"><tr>${socialsHtml}</tr></table></td></tr>`
+    : "";
+
+  const legalRow = legal
+    ? `<tr><td style="padding-top:12px; ${baseTd} font-size:11px; line-height:15px; color:${gray400}; max-width:420px;">${escapeHtml(legal).replace(/\n/g, "<br/>")}</td></tr>`
+    : "";
+
+  // Helper for contact detail rows
+  const row = (html: string, labelPrefix?: string) => {
+    if (!html) return "";
+    const prefix = labelPrefix ? `<span style="color:${gray500};">${labelPrefix}:</span> ` : "";
+    return `<tr><td style="padding:2px 0; ${baseTd} font-size:14px; line-height:18px; color:${gray600};">${prefix}${html}</td></tr>`;
+  };
+
+  const contactRows = [
+    row(officeHtml, "Office"),
+    row(mobileHtml, "Mobile"),
+    row(emailHtml),
+    row(webHtml),
+    row(addressHtml),
+  ].filter(Boolean).join("");
+
+  // ─── CLASSIC ──────────────────────────────────────────────
+  if (layout === "classic") {
+    const headerBlock = logoSrc
+      ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; ${baseTd}"><tr>
+          <td style="vertical-align:top; padding-right:12px;"><img src="${escapeHtml(logoSrc)}" width="48" height="48" style="display:block; border:0; outline:none; text-decoration:none; border-radius:10px;" alt="" /></td>
+          <td style="vertical-align:top; ${baseTd}">
+            ${fullName ? `<div style="${baseTd} font-size:18px; line-height:22px; font-weight:700; color:${black};">${escapeHtml(fullName)}</div>` : ""}
+            ${jobLine ? `<div style="${baseTd} padding-top:2px; font-size:14px; line-height:18px; color:${gray600};">${escapeHtml(jobLine)}</div>` : ""}
+            ${company ? `<div style="${baseTd} padding-top:2px; font-size:14px; line-height:18px; color:${gray400};">${escapeHtml(company)}</div>` : ""}
+          </td></tr></table>`
+      : `${fullName ? `<div style="${baseTd} font-size:18px; line-height:22px; font-weight:700; color:${black};">${escapeHtml(fullName)}</div>` : ""}
+         ${jobLine ? `<div style="${baseTd} padding-top:2px; font-size:14px; line-height:18px; color:${gray600};">${escapeHtml(jobLine)}</div>` : ""}
+         ${company ? `<div style="${baseTd} padding-top:2px; font-size:14px; line-height:18px; color:${gray400};">${escapeHtml(company)}</div>` : ""}`;
+
+    return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; ${baseTd}"><tr><td style="padding:0; ${baseTd}">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; ${baseTd}">
+        <tr><td style="padding:0; ${baseTd}">${headerBlock}</td></tr>
+        <tr><td style="padding-top:10px; ${baseTd}"><table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; ${baseTd}">${contactRows}</table></td></tr>
+        ${socialsRow}
+        ${legalRow}
+      </table></td></tr></table>`.trim();
+  }
+
+  // ─── ELEGANT ──────────────────────────────────────────────
+  // Left border accent line, refined typography
+  if (layout === "elegant") {
+    const nameBlock = `
+      ${fullName ? `<div style="${baseTd} font-size:20px; line-height:24px; font-weight:700; color:${black}; letter-spacing:-0.02em;">${escapeHtml(fullName)}</div>` : ""}
+      ${jobLine ? `<div style="${baseTd} padding-top:4px; font-size:13px; line-height:17px; color:${gray500}; text-transform:uppercase; letter-spacing:0.05em;">${escapeHtml(jobLine)}</div>` : ""}
+      ${company ? `<div style="${baseTd} padding-top:2px; font-size:13px; line-height:17px; color:${gray400};">${escapeHtml(company)}</div>` : ""}`;
+
+    const logoBlock = logoSrc
+      ? `<tr><td style="padding-bottom:10px; ${baseTd}"><img src="${escapeHtml(logoSrc)}" width="44" height="44" style="display:block; border:0; outline:none; text-decoration:none; border-radius:10px;" alt="" /></td></tr>`
       : "";
 
-  const headerBlock = logoSrc
-    ? `
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; ${baseTd}">
-  <tr>
-    <td style="vertical-align:top; padding-right:12px;">
-      <img src="${escapeHtml(logoSrc)}" width="48" height="48" style="display:block; border:0; outline:none; text-decoration:none; border-radius:10px;" alt="" />
-    </td>
-    <td style="vertical-align:top; ${baseTd}">
-      ${
-        fullName
-          ? `<div style="${baseTd} font-size:18px; line-height:22px; font-weight:700; color:${black};">${escapeHtml(
-              fullName
-            )}</div>`
-          : ""
-      }
-      ${
-        jobLine
-          ? `<div style="${baseTd} padding-top:2px; font-size:14px; line-height:18px; color:${gray600};">${escapeHtml(
-              jobLine
-            )}</div>`
-          : ""
-      }
-      ${
-        company
-          ? `<div style="${baseTd} padding-top:2px; font-size:14px; line-height:18px; color:${gray400};">${escapeHtml(
-              company
-            )}</div>`
-          : ""
-      }
-    </td>
-  </tr>
-</table>`
-    : `
-${
-  fullName
-    ? `<div style="${baseTd} font-size:18px; line-height:22px; font-weight:700; color:${black};">${escapeHtml(
-        fullName
-      )}</div>`
-    : ""
-}
-${
-  jobLine
-    ? `<div style="${baseTd} padding-top:2px; font-size:14px; line-height:18px; color:${gray600};">${escapeHtml(
-        jobLine
-      )}</div>`
-    : ""
-}
-${
-  company
-    ? `<div style="${baseTd} padding-top:2px; font-size:14px; line-height:18px; color:${gray400};">${escapeHtml(
-        company
-      )}</div>`
-    : ""
-}`;
+    const contactInline = [officeHtml, mobileHtml, emailHtml, webHtml].filter(Boolean);
+    const contactSeparated = contactInline.join(`<span style="color:${gray400}; padding:0 6px;">\u2022</span>`);
 
-  const html = `
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; ${baseTd}">
-  <tr>
-    <td style="padding:0; ${baseTd}">
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; ${baseTd}">
-        <tr>
-          <td style="padding:0; ${baseTd}">${headerBlock}</td>
-        </tr>
+    return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; ${baseTd}"><tr>
+      <td style="border-left:3px solid ${accent}; padding-left:14px; ${baseTd}">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; ${baseTd}">
+          ${logoBlock}
+          <tr><td style="${baseTd}">${nameBlock}</td></tr>
+          ${contactSeparated ? `<tr><td style="padding-top:10px; ${baseTd} font-size:13px; line-height:17px; color:${gray600};">${contactSeparated}</td></tr>` : ""}
+          ${addressHtml ? `<tr><td style="padding-top:2px; ${baseTd} font-size:13px; line-height:17px; color:${gray600};">${addressHtml}</td></tr>` : ""}
+          ${socialsRow}
+          ${legalRow}
+        </table>
+      </td></tr></table>`.trim();
+  }
 
-        <tr>
-          <td style="padding-top:10px; ${baseTd}">
-            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; ${baseTd}">
-              ${row(officeHtml)}
-              ${row(mobileHtml)}
-              ${row(emailHtml)}
-              ${row(webHtml)}
-              ${row(addressHtml)}
-            </table>
-          </td>
-        </tr>
+  // ─── HORIZONTAL ───────────────────────────────────────────
+  // Logo on left, vertical divider, info on right — all in one row
+  if (layout === "horizontal") {
+    const leftCol = logoSrc
+      ? `<td style="vertical-align:top; padding-right:14px; ${baseTd}"><img src="${escapeHtml(logoSrc)}" width="56" height="56" style="display:block; border:0; outline:none; text-decoration:none; border-radius:12px;" alt="" /></td>
+         <td style="width:1px; background:${dividerColor}; font-size:0; line-height:0;" width="1">&nbsp;</td>`
+      : `<td style="width:3px; background:${dividerColor}; font-size:0; line-height:0;" width="3">&nbsp;</td>`;
 
+    const phoneItems = [
+      officePhone ? `Office: ${escapeHtml(officePhone)}` : "",
+      mobilePhone ? `Mobile: ${escapeHtml(mobilePhone)}` : "",
+    ].filter(Boolean).join(" | ");
+
+    const rightContent = `
+      ${fullName ? `<div style="${baseTd} font-size:17px; line-height:21px; font-weight:700; color:${black};">${escapeHtml(fullName)}</div>` : ""}
+      ${jobLine ? `<div style="${baseTd} padding-top:1px; font-size:13px; line-height:17px; color:${gray600};">${escapeHtml(jobLine)}</div>` : ""}
+      ${company ? `<div style="${baseTd} padding-top:1px; font-size:13px; line-height:17px; color:${gray400};">${escapeHtml(company)}</div>` : ""}
+      ${phoneItems ? `<div style="${baseTd} padding-top:8px; font-size:12px; line-height:16px; color:${gray500};">${phoneItems}</div>` : ""}
+      ${email ? `<div style="${baseTd} padding-top:1px; font-size:12px; line-height:16px;"><a href="mailto:${escapeHtml(email)}" style="color:${gray600}; text-decoration:none;">${escapeHtml(email)}</a></div>` : ""}
+      ${website ? `<div style="${baseTd} padding-top:1px; font-size:12px; line-height:16px;"><a href="${escapeHtml(website)}" style="color:${gray600}; text-decoration:none;">${escapeHtml(website.replace(/^https?:\/\//i, ""))}</a></div>` : ""}
+      ${address ? `<div style="${baseTd} padding-top:1px; font-size:12px; line-height:16px; color:${gray500};">${escapeHtml(address)}</div>` : ""}`;
+
+    return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; ${baseTd}"><tr>
+      ${leftCol}
+      <td style="vertical-align:top; padding-left:14px; ${baseTd}">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; ${baseTd}">
+          <tr><td style="${baseTd}">${rightContent}</td></tr>
+          ${socialsRow}
+          ${legalRow}
+        </table>
+      </td></tr></table>`.trim();
+  }
+
+  // ─── MINIMAL ──────────────────────────────────────────────
+  // Ultra-clean: name, one-line info, socials
+  if (layout === "minimal") {
+    const infoItems = [email, websiteUrl ? website.replace(/^https?:\/\//i, "") : "", officePhone || mobilePhone].filter(Boolean);
+    const infoLine = infoItems.map(i => `<span style="color:${gray600};">${escapeHtml(i)}</span>`).join(`<span style="color:${gray400}; padding:0 6px;">|</span>`);
+
+    return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; ${baseTd}">
+      <tr><td style="${baseTd}">
+        <div style="${baseTd} font-size:16px; line-height:20px; font-weight:700; color:${black};">${escapeHtml(fullName || "Your Name")}</div>
+        ${jobLine || company ? `<div style="${baseTd} padding-top:2px; font-size:13px; line-height:17px; color:${gray500};">${escapeHtml([jobLine, company].filter(Boolean).join(" \u2014 "))}</div>` : ""}
+        <tr><td style="padding-top:6px; ${baseTd}"><table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;"><tr><td style="height:1px; background:${dividerColor}; font-size:0; line-height:0;" colspan="1">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td></tr></table></td></tr>
+        ${infoLine ? `<tr><td style="padding-top:6px; ${baseTd} font-size:12px; line-height:16px;">${infoLine}</td></tr>` : ""}
         ${socialsRow}
+        ${legalRow}
+      </td></tr></table>`.trim();
+  }
 
-        ${
-          legal
-            ? `
-<tr>
-  <td style="padding-top:12px; ${baseTd} font-size:11px; line-height:15px; color:${gray400}; max-width:420px;">${escapeHtml(
-                legal
-              ).replace(/\n/g, "<br/>")}</td>
-</tr>`
-            : ""
-        }
-      </table>
-    </td>
-  </tr>
-</table>
-`.trim();
+  // ─── BOLD ─────────────────────────────────────────────────
+  // Large name, colored accent, compact info block
+  if (layout === "bold") {
+    const logoBlock = logoSrc
+      ? `<td style="vertical-align:middle; padding-right:14px; ${baseTd}"><img src="${escapeHtml(logoSrc)}" width="52" height="52" style="display:block; border:0; outline:none; text-decoration:none; border-radius:12px;" alt="" /></td>`
+      : "";
 
-  return html;
+    const detailItems = [officeHtml, mobileHtml, emailHtml, webHtml, addressHtml].filter(Boolean);
+    const detailRows = detailItems.map(item => `<tr><td style="padding:1px 0; ${baseTd} font-size:13px; line-height:17px; color:${gray600};">${item}</td></tr>`).join("");
+
+    return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; ${baseTd}">
+      <tr>
+        ${logoBlock}
+        <td style="vertical-align:middle; ${baseTd}">
+          <div style="${baseTd} font-size:22px; line-height:26px; font-weight:800; color:${black}; letter-spacing:-0.03em;">${escapeHtml(fullName || "Your Name")}</div>
+          ${jobLine ? `<div style="${baseTd} padding-top:2px; font-size:14px; line-height:18px; color:${accent}; font-weight:600;">${escapeHtml(jobLine)}</div>` : ""}
+          ${company ? `<div style="${baseTd} padding-top:1px; font-size:13px; line-height:17px; color:${gray400};">${escapeHtml(company)}</div>` : ""}
+        </td>
+      </tr>
+      <tr><td ${logoBlock ? 'colspan="2"' : ""} style="padding-top:8px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;"><tr><td style="height:2px; background:${accent}; font-size:0; line-height:0; width:40px;" width="40">&nbsp;</td><td style="height:2px; background:${dividerColor}; font-size:0; line-height:0; width:200px;" width="200">&nbsp;</td></tr></table></td></tr>
+      ${detailRows ? `<tr><td ${logoBlock ? 'colspan="2"' : ""} style="padding-top:8px; ${baseTd}"><table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; ${baseTd}">${detailRows}</table></td></tr>` : ""}
+      ${socialsHtml ? `<tr><td ${logoBlock ? 'colspan="2"' : ""} style="padding-top:10px; ${baseTd}"><table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; ${baseTd}"><tr>${socialsHtml}</tr></table></td></tr>` : ""}
+      ${legal ? `<tr><td ${logoBlock ? 'colspan="2"' : ""} style="padding-top:12px; ${baseTd} font-size:11px; line-height:15px; color:${gray400}; max-width:420px;">${escapeHtml(legal).replace(/\n/g, "<br/>")}</td></tr>` : ""}
+    </table>`.trim();
+  }
+
+  // fallback — classic
+  return buildSignatureHTML(data, { ...opts, layout: "classic" });
+}
+
+/* ─── Mini SVG thumbnails for theme picker ────────────────── */
+function LayoutThumb({ layout }: { layout: SignatureLayout }) {
+  const w = 160;
+  const h = 100;
+  const bar = "#6b7280";
+  const line = "#9ca3af";
+  const faint = "#d1d5db";
+
+  if (layout === "classic") {
+    return (
+      <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-auto">
+        <rect x="12" y="12" width="20" height="20" rx="5" fill={faint} />
+        <rect x="38" y="12" width="50" height="6" rx="2" fill={bar} />
+        <rect x="38" y="22" width="36" height="4" rx="1.5" fill={line} />
+        <rect x="38" y="30" width="28" height="4" rx="1.5" fill={faint} />
+        <rect x="12" y="42" width="44" height="3" rx="1.5" fill={line} />
+        <rect x="12" y="49" width="48" height="3" rx="1.5" fill={line} />
+        <rect x="12" y="56" width="60" height="3" rx="1.5" fill={faint} />
+        <rect x="12" y="68" width="10" height="10" rx="3" fill={faint} />
+        <rect x="25" y="68" width="10" height="10" rx="3" fill={faint} />
+        <rect x="38" y="68" width="10" height="10" rx="3" fill={faint} />
+        <rect x="12" y="84" width="90" height="2" rx="1" fill={faint} opacity="0.5" />
+      </svg>
+    );
+  }
+
+  if (layout === "elegant") {
+    return (
+      <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-auto">
+        <rect x="12" y="8" width="3" height="82" rx="1.5" fill="#4f46e5" />
+        <rect x="22" y="10" width="18" height="18" rx="5" fill={faint} />
+        <rect x="22" y="34" width="56" height="6" rx="2" fill={bar} />
+        <rect x="22" y="44" width="40" height="3.5" rx="1.5" fill={line} />
+        <rect x="22" y="51" width="32" height="3.5" rx="1.5" fill={faint} />
+        <rect x="22" y="62" width="80" height="3" rx="1.5" fill={line} />
+        <rect x="22" y="69" width="60" height="3" rx="1.5" fill={faint} />
+        <rect x="22" y="80" width="10" height="10" rx="3" fill={faint} />
+        <rect x="35" y="80" width="10" height="10" rx="3" fill={faint} />
+      </svg>
+    );
+  }
+
+  if (layout === "horizontal") {
+    return (
+      <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-auto">
+        <rect x="12" y="20" width="28" height="28" rx="7" fill={faint} />
+        <rect x="44" y="20" width="1" height="60" fill={line} />
+        <rect x="52" y="20" width="52" height="6" rx="2" fill={bar} />
+        <rect x="52" y="30" width="36" height="3.5" rx="1.5" fill={line} />
+        <rect x="52" y="37" width="28" height="3.5" rx="1.5" fill={faint} />
+        <rect x="52" y="48" width="44" height="3" rx="1.5" fill={line} />
+        <rect x="52" y="55" width="56" height="3" rx="1.5" fill={faint} />
+        <rect x="52" y="62" width="40" height="3" rx="1.5" fill={faint} />
+        <rect x="52" y="72" width="10" height="10" rx="3" fill={faint} />
+        <rect x="65" y="72" width="10" height="10" rx="3" fill={faint} />
+        <rect x="78" y="72" width="10" height="10" rx="3" fill={faint} />
+      </svg>
+    );
+  }
+
+  if (layout === "minimal") {
+    return (
+      <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-auto">
+        <rect x="12" y="18" width="56" height="6" rx="2" fill={bar} />
+        <rect x="12" y="28" width="72" height="3.5" rx="1.5" fill={line} />
+        <rect x="12" y="40" width="120" height="1" fill={faint} />
+        <rect x="12" y="48" width="80" height="3" rx="1.5" fill={line} />
+        <rect x="12" y="60" width="10" height="10" rx="3" fill={faint} />
+        <rect x="25" y="60" width="10" height="10" rx="3" fill={faint} />
+        <rect x="38" y="60" width="10" height="10" rx="3" fill={faint} />
+        <rect x="12" y="78" width="100" height="2" rx="1" fill={faint} opacity="0.5" />
+      </svg>
+    );
+  }
+
+  // bold
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-auto">
+      <rect x="12" y="10" width="24" height="24" rx="6" fill={faint} />
+      <rect x="42" y="10" width="64" height="8" rx="2.5" fill={bar} />
+      <rect x="42" y="22" width="40" height="4" rx="1.5" fill="#4f46e5" />
+      <rect x="42" y="30" width="30" height="3.5" rx="1.5" fill={faint} />
+      <rect x="12" y="42" width="40" height="2" rx="1" fill="#4f46e5" />
+      <rect x="52" y="42" width="60" height="2" rx="1" fill={faint} />
+      <rect x="12" y="52" width="48" height="3" rx="1.5" fill={line} />
+      <rect x="12" y="59" width="56" height="3" rx="1.5" fill={line} />
+      <rect x="12" y="66" width="40" height="3" rx="1.5" fill={faint} />
+      <rect x="12" y="78" width="10" height="10" rx="3" fill={faint} />
+      <rect x="25" y="78" width="10" height="10" rx="3" fill={faint} />
+      <rect x="38" y="78" width="10" height="10" rx="3" fill={faint} />
+    </svg>
+  );
 }
 
 function SectionTitle({ children, right }: { children: React.ReactNode; right?: React.ReactNode }) {
@@ -411,6 +557,7 @@ export default function App() {
 
   const [data, setData] = useState<FormData>(DEFAULTS);
   const [previewTheme, setPreviewTheme] = useState<"light" | "dark">("light");
+  const [signatureLayout, setSignatureLayout] = useState<SignatureLayout>("classic");
 
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [showErrors, setShowErrors] = useState(false);
@@ -481,8 +628,8 @@ export default function App() {
   const markTouched = (name: keyof FormData | string) => setTouched((t) => ({ ...t, [name]: true }));
 
   const signatureHtml = useMemo(
-    () => buildSignatureHTML(data, { theme: previewTheme }),
-    [data, previewTheme]
+    () => buildSignatureHTML(data, { theme: previewTheme, layout: signatureLayout }),
+    [data, previewTheme, signatureLayout]
   );
 
   const previewDoc = useMemo(() => {
@@ -831,6 +978,38 @@ export default function App() {
               </div>
               <div className="mt-3 text-xs text-zinc-500">
                 Tip: you can paste full links or just domains — the generator will add https:// when needed.
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <SectionTitle>Themes</SectionTitle>
+              <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                {SIGNATURE_LAYOUTS.map((l) => (
+                  <button
+                    key={l.id}
+                    type="button"
+                    onClick={() => setSignatureLayout(l.id)}
+                    className={`group relative flex flex-col items-center rounded-xl border p-2.5 transition-all duration-200 ${
+                      signatureLayout === l.id
+                        ? "border-white/30 bg-white/10 ring-1 ring-white/20"
+                        : "border-white/10 bg-zinc-950/40 hover:border-white/20 hover:bg-white/5"
+                    }`}
+                  >
+                    <div className="w-full overflow-hidden rounded-lg bg-zinc-900/80 p-1">
+                      <LayoutThumb layout={l.id} />
+                    </div>
+                    <div className={`mt-2 text-[11px] font-medium transition-colors ${
+                      signatureLayout === l.id ? "text-zinc-100" : "text-zinc-500 group-hover:text-zinc-300"
+                    }`}>
+                      {l.name}
+                    </div>
+                    {signatureLayout === l.id && (
+                      <div className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-white">
+                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5.5L4 7.5L8 3" stroke="#111827" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                      </div>
+                    )}
+                  </button>
+                ))}
               </div>
             </div>
 
